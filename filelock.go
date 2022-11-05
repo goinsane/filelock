@@ -8,7 +8,8 @@ import (
 
 type File struct {
 	internalFile
-	name string
+	name      string
+	closeOnce sync.Once
 }
 
 type internalFile = *os.File
@@ -59,9 +60,22 @@ func OpenFile(name string, flag int, perm os.FileMode) (f *File, err error) {
 
 func (f *File) Close() (err error) {
 	err = f.internalFile.Close()
-	filesMu.Lock()
-	delete(files, f.name)
-	filesMu.Unlock()
+	f.closeOnce.Do(func() {
+		filesMu.Lock()
+		delete(files, f.name)
+		filesMu.Unlock()
+	})
+	return
+}
+
+func (f *File) Release() (err error) {
+	f.closeOnce.Do(func() {
+		_ = os.Remove(f.name)
+		err = f.internalFile.Close()
+		filesMu.Lock()
+		delete(files, f.name)
+		filesMu.Unlock()
+	})
 	return
 }
 
