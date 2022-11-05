@@ -1,9 +1,12 @@
 package filelock
 
 import (
+	"context"
+	"errors"
 	"os"
 	"sync"
 	"syscall"
+	"time"
 )
 
 type File struct {
@@ -16,10 +19,6 @@ type internalFile = *os.File
 
 func Open(name string) (*File, error) {
 	return OpenFile(name, os.O_RDONLY, 0)
-}
-
-func Create(name string) (*File, error) {
-	return OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 }
 
 func OpenFile(name string, flag int, perm os.FileMode) (f *File, err error) {
@@ -41,6 +40,11 @@ func OpenFile(name string, flag int, perm os.FileMode) (f *File, err error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err != nil {
+			_ = f2.Close()
+		}
+	}()
 	ok, err := posixLock(f2.Fd())
 	if err != nil {
 		return nil, err
@@ -56,6 +60,43 @@ func OpenFile(name string, flag int, perm os.FileMode) (f *File, err error) {
 	files[name] = f
 	filesMu.Unlock()
 	return f, nil
+}
+
+func Obtain(name string) (*File, error) {
+	f, err := OpenFile(name, os.O_RDWR, 0666)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		f, err = OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+		if err != nil {
+			if !errors.Is(err, os.ErrExist) {
+				return nil, err
+			}
+			return nil, ErrLocked
+		}
+	}
+	return f, nil
+}
+
+func Acquire(ctx context.Context, name string) (*File, error) {
+	f, err := Obtain(name)
+	if err != ErrLocked {
+		return f, err
+	}
+	tkr := time.NewTicker(100 * time.Millisecond)
+	defer tkr.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-tkr.C:
+			f, err = Obtain(name)
+			if err != ErrLocked {
+				return f, err
+			}
+		}
+	}
 }
 
 func (f *File) Close() (err error) {
