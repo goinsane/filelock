@@ -7,5 +7,5 @@ import (
 type LockError struct{ error }
 
 var (
-	ErrLocked = errors.New("locked")
+	ErrLocked = LockError{errors.New("locked")}
 )
