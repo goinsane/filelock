@@ -12,7 +12,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	//goland:noinspection GoUnhandledErrorResult
 	defer f.Release()
 	time.Sleep(10 * time.Second)
 }
