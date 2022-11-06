@@ -1,3 +1,4 @@
+// Package filelock provides locked File struct similar with os.File.
 package filelock
 
 import (
@@ -9,6 +10,7 @@ import (
 	"time"
 )
 
+// File represents an open file descriptor such as os.File. But File always has Posix write lock.
 type File struct {
 	internalFile
 	name      string
@@ -17,10 +19,14 @@ type File struct {
 
 type internalFile = *os.File
 
+// Open opens the named file with Posix lock for reading such as os.Open.
+// When an error occurs, Open returns the error like OpenFile.
 func Open(name string) (*File, error) {
 	return OpenFile(name, os.O_RDONLY, 0)
 }
 
+// OpenFile opens the named file with Posix lock such as os.OpenFile.
+// When an error occurs, OpenFile returns os.OpenFile error or ErrLocked or LockError.
 func OpenFile(name string, flag int, perm os.FileMode) (f *File, err error) {
 	filesMu.Lock()
 	if _, ok := files[name]; ok {
