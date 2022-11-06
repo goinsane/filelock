@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	f, err := filelock.Obtain(os.TempDir() + string(os.PathSeparator) + "filelock.test")
+	f, err := filelock.Create(os.TempDir()+string(os.PathSeparator)+"filelock.test", 0666)
 	if err != nil {
 		panic(err)
 	}
