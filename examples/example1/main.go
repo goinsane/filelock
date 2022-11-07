@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -8,7 +9,9 @@ import (
 )
 
 func main() {
-	f, err := filelock.Create(os.TempDir()+string(os.PathSeparator)+"filelock.test", 0666)
+	name := os.TempDir() + string(os.PathSeparator) + "filelock.test"
+	fmt.Println(name)
+	f, err := filelock.Create(name, 0666)
 	if err != nil {
 		panic(err)
 	}
