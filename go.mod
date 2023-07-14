@@ -1,3 +1,3 @@
 module github.com/goinsane/filelock
 
-go 1.8
+go 1.9
