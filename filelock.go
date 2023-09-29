@@ -3,7 +3,6 @@ package filelock
 
 import (
 	"context"
-	"errors"
 	"os"
 	"sync"
 	"syscall"
@@ -19,38 +18,30 @@ type File struct {
 
 type internalFile = *os.File
 
-// Open opens the named file with OpenFile for reading.
-// When an error occurs, Open returns the error like OpenFile.
-// If successful, methods on the returned file can be used for reading; the associated file descriptor has mode os.O_RDONLY.
+// Open opens the named file with OpenFile for reading by using OpenFile.
+// When an error occurs, Open returns the error from OpenFile.
+// If successful, methods on the returned file can be used for reading;
+// the associated file descriptor has mode os.O_RDONLY.
 func Open(name string) (*File, error) {
 	return OpenFile(name, os.O_RDONLY, 0)
 }
 
-// Create creates or opens the named file with OpenFile.
-// When an error occurs, Create returns OpenFile error.
-// If the file already exists, it is not truncated as with os.Create.
-// If the file does not exist, it is created with mode perm (before umask).
-// If successful, methods on the returned File can be used for I/O; the associated file descriptor has mode os.O_RDWR.
-func Create(name string, perm os.FileMode) (*File, error) {
-	f, err := OpenFile(name, os.O_RDWR, 0)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
-		f, err = OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, perm)
-		if err != nil {
-			if _, ok := err.(*LockError); ok {
-				_ = os.Remove(name)
-			}
-			return nil, err
-		}
-	}
-	return f, nil
+// Create creates or truncates the named file by using OpenFile.
+// If the file already exists, it is truncated.
+// If the file does not exist, it is created with mode 0666 (before umask).
+// When an error occurs, Create returns the error from OpenFile.
+// If LockError occurs, Create will not delete created file.
+// If successful, methods on the returned File can be used for I/O;
+// the associated file descriptor has mode os.O_RDWR.
+func Create(name string) (*File, error) {
+	return OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 }
 
-// OpenFile opens the named file with os.OpenFile, after locks with Posix lock.
-// When an error occurs, OpenFile returns os.OpenFile error or LockError.
-// If the file created with os.O_CREATE and LockError occurs, OpenFile will not delete created file.
+// OpenFile opens the named file with specified flag (O_RDONLY etc.) by using os.OpenFile, after locks with Posix lock.
+// If the file does not exist and the os.O_CREATE flag is passed, it is created with mode perm (before umask).
+// When an error occurs, OpenFile returns the os.OpenFile error or LockError.
+// If the file created with os.O_CREATE flag and LockError occurs, OpenFile will not delete created file.
+// If successful, methods on the returned File can be used for I/O.
 func OpenFile(name string, flag int, perm os.FileMode) (f *File, err error) {
 	filesMu.Lock()
 	if _, ok := files[name]; ok {
