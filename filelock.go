@@ -3,7 +3,9 @@ package filelock
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -13,6 +15,7 @@ import (
 type File struct {
 	internalFile
 	name      string
+	absPath   string
 	closeOnce sync.Once
 }
 
@@ -43,20 +46,26 @@ func Create(name string) (*File, error) {
 // If the file created with os.O_CREATE flag and LockError occurs, OpenFile will not delete created file.
 // If successful, methods on the returned File can be used for I/O.
 func OpenFile(name string, flag int, perm os.FileMode) (f *File, err error) {
+	absPath, err := filepath.Abs(name)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get abs path: %w", err)
+	}
+
 	filesMu.Lock()
-	if _, ok := files[name]; ok {
+	if _, ok := files[absPath]; ok {
 		filesMu.Unlock()
 		return nil, ErrLocked
 	}
-	files[name] = nil
+	files[absPath] = nil
 	filesMu.Unlock()
 	defer func() {
 		if err != nil {
 			filesMu.Lock()
-			delete(files, name)
+			delete(files, absPath)
 			filesMu.Unlock()
 		}
 	}()
+
 	f2, err := os.OpenFile(name, flag, perm)
 	if err != nil {
 		return nil, err
@@ -66,6 +75,7 @@ func OpenFile(name string, flag int, perm os.FileMode) (f *File, err error) {
 			_ = f2.Close()
 		}
 	}()
+
 	ok, err := posixLock(f2.Fd())
 	if err != nil {
 		return nil, err
@@ -73,13 +83,17 @@ func OpenFile(name string, flag int, perm os.FileMode) (f *File, err error) {
 	if !ok {
 		return nil, ErrLocked
 	}
+
 	f = &File{
 		internalFile: f2,
 		name:         name,
+		absPath:      absPath,
 	}
+
 	filesMu.Lock()
-	files[name] = f
+	files[absPath] = f
 	filesMu.Unlock()
+
 	return f, nil
 }
 
@@ -109,7 +123,7 @@ func (f *File) Close() (err error) {
 	err = f.internalFile.Close()
 	f.closeOnce.Do(func() {
 		filesMu.Lock()
-		delete(files, f.name)
+		delete(files, f.absPath)
 		filesMu.Unlock()
 	})
 	return
@@ -121,7 +135,7 @@ func (f *File) Release() (err error) {
 		_ = os.Remove(f.name)
 		err = f.internalFile.Close()
 		filesMu.Lock()
-		delete(files, f.name)
+		delete(files, f.absPath)
 		filesMu.Unlock()
 	})
 	return
