@@ -21,7 +21,7 @@ type File struct {
 
 type internalFile = *os.File
 
-// Open opens the named file with OpenFile for reading by using OpenFile.
+// Open opens the named file for reading by using OpenFile.
 // When an error occurs, Open returns the error from OpenFile.
 // If successful, methods on the returned file can be used for reading;
 // the associated file descriptor has mode os.O_RDONLY.
