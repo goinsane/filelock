@@ -2,13 +2,11 @@
 package filelock
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"syscall"
-	"time"
 )
 
 // File represents an open file descriptor such as os.File. But File always has Posix write lock.
@@ -95,27 +93,6 @@ func OpenFile(name string, flag int, perm os.FileMode) (f *File, err error) {
 	filesMu.Unlock()
 
 	return f, nil
-}
-
-// Acquire tries to obtain file lock given period.
-func Acquire(ctx context.Context, name string, perm os.FileMode, period time.Duration) (*File, error) {
-	f, err := Create(name, perm)
-	if err != ErrLocked {
-		return f, err
-	}
-	tkr := time.NewTicker(period)
-	defer tkr.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-tkr.C:
-			f, err = Create(name, perm)
-			if err != ErrLocked {
-				return f, err
-			}
-		}
-	}
 }
 
 // Close closes and unlocks the File.
